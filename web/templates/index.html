@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>College Scorecard Explorer</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>College Scorecard Explorer</h1>
+        </header>
+        
+        <div class="main-layout">
+            <aside class="sidebar">
+                <h2>Tables</h2>
+                <div id="table-list" class="table-list">
+                    <p class="loading">Loading tables...</p>
+                </div>
+            </aside>
+            
+            <main class="content">
+                <div class="tabs">
+                    <button class="tab active" data-tab="browse">Browse Data</button>
+                    <button class="tab" data-tab="query">Custom Query</button>
+                </div>
+                
+                <div id="browse-tab" class="tab-content active">
+                    <div id="table-info" class="table-info">
+                        <p class="placeholder">Select a table from the sidebar to view its data</p>
+                    </div>
+                    
+                    <div id="data-container" class="data-container hidden">
+                        <div class="table-header">
+                            <h3 id="current-table-name"></h3>
+                            <div class="pagination">
+                                <button id="prev-page" disabled>&larr; Previous</button>
+                                <span id="page-info">Page 1 of 1</span>
+                                <button id="next-page" disabled>Next &rarr;</button>
+                            </div>
+                        </div>
+                        <div class="table-wrapper">
+                            <table id="data-table">
+                                <thead></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div class="row-count">
+                            <span id="row-info"></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="query-tab" class="tab-content">
+                    <div class="query-section">
+                        <textarea id="query-input" placeholder="Enter your SQL query here... (SELECT only)&#10;&#10;Example: SELECT INSTNM, CITY, STABBR FROM scorecard_2023_24 LIMIT 10"></textarea>
+                        <button id="run-query">Run Query</button>
+                    </div>
+                    <div id="query-results" class="query-results">
+                        <p class="placeholder">Query results will appear here</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <script src="/static/script.js"></script>
+</body>
+</html>
