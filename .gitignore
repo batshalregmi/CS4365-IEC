@@ -1,2 +1,6 @@
 datasets/
 data.duckdb
+grafana/
+timescale_data/
+__pycache__/
+columns_used.md
