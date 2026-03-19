@@ -1,1 +1,3 @@
 duckdb
+requests
+beautifulsoup4

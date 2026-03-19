@@ -4,6 +4,7 @@ import os
 import re
 
 from census_education_parser import parse_and_insert_census_education_csv
+from fed_scraper import parse_fed_higher_ed_datapoints
 
 
 def extract_year_from_filename(filename):
@@ -239,6 +240,7 @@ if __name__ == "__main__":
     
     parse_and_insert_merged_files()
     parse_and_insert_census_education_csv()
+    parse_fed_higher_ed_datapoints()
     
     # Analyze NA distribution
     analyze_na_distribution()
@@ -247,4 +249,4 @@ if __name__ == "__main__":
     filter_na_columns(na_threshold=0.5, keep_columns=GRADUATION_COLUMNS)
     
     # Export cleaned data to PostgreSQL for Metabase
-    export_to_postgres(tables=["scorecard_2023_24_clean", "census_education_attainment_2024"])
+    export_to_postgres(tables=["scorecard_2023_24_clean", "census_education_attainment_2024", "fed_higher_ed_shed_2024"])
