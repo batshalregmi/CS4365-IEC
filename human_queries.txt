@@ -1,0 +1,74 @@
+Sample human queries that my partner and I have come up with after using the data cleanup code.
+
+
+Race comparison example (Fed-only)
+SELECT category AS race_ethnicity, metric, value_pct
+FROM fed_higher_ed_shed_2024
+WHERE source_table_title IN ('Table 43. Educational attainment', 'Table 44. Behind on student loan payments', 'Figure 35. Share with at least $25,000 student loan debt')
+AND section_group = 'Race/ethnicity'
+ORDER BY source_table_title, category, metric;
+
+
+
+Male and Female graduation by age
+SELECT
+    age_group,
+    male_bachelors_pct,
+    female_bachelors_pct
+FROM (
+    SELECT
+        LAG(label) OVER (ORDER BY row_order) AS age_group,
+        male_percent_estimate AS male_bachelors_pct,
+        female_percent_estimate AS female_bachelors_pct,
+        row_order
+    FROM census_education_attainment_2024
+    WHERE section = 'AGE BY EDUCATIONAL ATTAINMENT'
+      AND (
+          label_level = 1
+          OR (label_level = 2 AND label = 'Bachelor''s degree or higher')
+      )
+) t
+WHERE male_bachelors_pct IS NOT NULL
+ORDER BY row_order;
+
+
+pell completion with and without loans
+
+SELECT Round(Avg(CASE
+                   WHEN "c150_4_pell" ~ '^[0-9.]+$' THEN
+                   "c150_4_pell" :: NUMERIC
+                 END) * 100, 1) AS pell_completion_pct,
+       Round(Avg(CASE
+                   WHEN "c150_4_loannopell" ~ '^[0-9.]+$' THEN
+                   "c150_4_loannopell" :: NUMERIC
+                 END) * 100, 1) AS nonpell_with_loan_completion_pct,
+       Round(Avg(CASE
+                   WHEN "c150_4_noloannopell" ~ '^[0-9.]+$' THEN
+                   "c150_4_noloannopell" :: NUMERIC
+                 END) * 100, 1) AS nonpell_without_loan_completion_pct
+FROM   scorecard_2023_24_clean; 
+
+
+National average graduation completion
+SELECT 
+    'National' as scope,
+    ROUND(AVG(CASE WHEN "C150_4" ~ '^[0-9.]+$' THEN "C150_4"::numeric END), 3) as overall,
+    ROUND(AVG(CASE WHEN "C150_4_WHITE" ~ '^[0-9.]+$' THEN "C150_4_WHITE"::numeric END), 3) as white,
+    ROUND(AVG(CASE WHEN "C150_4_BLACK" ~ '^[0-9.]+$' THEN "C150_4_BLACK"::numeric END), 3) as black,
+    ROUND(AVG(CASE WHEN "C150_4_HISP" ~ '^[0-9.]+$' THEN "C150_4_HISP"::numeric END), 3) as hispanic,
+    ROUND(AVG(CASE WHEN "C150_4_ASIAN" ~ '^[0-9.]+$' THEN "C150_4_ASIAN"::numeric END), 3) as asian
+FROM scorecard_2023_24_clean
+WHERE "C150_4" IS NOT NULL 
+  AND "C150_4" NOT IN ('NULL', 'PrivacySuppressed', 'NA', 'PS', '');
+
+national completion rates by race
+
+SELECT
+    ROUND(AVG(CASE WHEN "C150_4"       ~ '^[0-9.]+$' THEN "C150_4"::numeric END) * 100, 1) AS overall_completion_pct,
+    ROUND(AVG(CASE WHEN "C150_4_WHITE" ~ '^[0-9.]+$' THEN "C150_4_WHITE"::numeric END) * 100, 1) AS white_completion_pct,
+    ROUND(AVG(CASE WHEN "C150_4_BLACK" ~ '^[0-9.]+$' THEN "C150_4_BLACK"::numeric END) * 100, 1) AS black_completion_pct,
+    ROUND(AVG(CASE WHEN "C150_4_HISP"  ~ '^[0-9.]+$' THEN "C150_4_HISP"::numeric END) * 100, 1) AS hispanic_completion_pct,
+    ROUND(AVG(CASE WHEN "C150_4_ASIAN" ~ '^[0-9.]+$' THEN "C150_4_ASIAN"::numeric END) * 100, 1) AS asian_completion_pct
+FROM scorecard_2023_24_clean
+WHERE "C150_4" IS NOT NULL
+  AND "C150_4" NOT IN ('NULL', 'PrivacySuppressed', 'NA', 'PS', '');

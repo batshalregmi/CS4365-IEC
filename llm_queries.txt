@@ -1,0 +1,212 @@
+LLM Output:
+Great dataset setup — I profiled the DuckDB tables and pulled out trends that are strong enough to chart directly in Metabase.
+The biggest signals I found:
+- Private nonprofit institutions have the highest average completion (~55.8%), above public and for-profit (~47% each).
+- Completion drops as Pell share rises (lowest-Pell quintile ~67.1% vs highest-Pell quintile ~40.4%).
+- Higher in-state tuition bands show higher completion (top tuition quintile ~71.3%).
+- White vs Black completion gaps are large in many states (e.g., IA ~31.7 percentage points in this sample).
+- Census + Fed both show major race disparities in bachelor’s attainment; poverty declines sharply with education level.
+Also important: the Scorecard gender completion component columns (FEMALE_COMP_*, MALE_COMP_*) are all NA in this loaded year, so I excluded those from trend SQL.
+1) Completion by institution control and race (Scorecard)
+WITH base AS (
+  SELECT
+    CASE CAST("CONTROL" AS text)
+      WHEN '1' THEN 'Public'
+      WHEN '2' THEN 'Private nonprofit'
+      WHEN '3' THEN 'Private for-profit'
+      ELSE CAST("CONTROL" AS text)
+    END AS control_type,
+    CASE WHEN "C150_4"::text ~ '^[0-9.]+$' THEN "C150_4"::numeric END AS overall_completion,
+    CASE WHEN "C150_4_WHITE"::text ~ '^[0-9.]+$' THEN "C150_4_WHITE"::numeric END AS white_completion,
+    CASE WHEN "C150_4_BLACK"::text ~ '^[0-9.]+$' THEN "C150_4_BLACK"::numeric END AS black_completion,
+    CASE WHEN "C150_4_HISP"::text ~ '^[0-9.]+$' THEN "C150_4_HISP"::numeric END AS hispanic_completion,
+    CASE WHEN "C150_4_ASIAN"::text ~ '^[0-9.]+$' THEN "C150_4_ASIAN"::numeric END AS asian_completion
+  FROM scorecard_2023_24_clean
+)
+SELECT
+  control_type,
+  ROUND(AVG(overall_completion) * 100, 1) AS overall_completion_pct,
+  ROUND(AVG(white_completion) * 100, 1) AS white_completion_pct,
+  ROUND(AVG(black_completion) * 100, 1) AS black_completion_pct,
+  ROUND(AVG(hispanic_completion) * 100, 1) AS hispanic_completion_pct,
+  ROUND(AVG(asian_completion) * 100, 1) AS asian_completion_pct,
+  ROUND((AVG(white_completion) - AVG(black_completion)) * 100, 1) AS white_black_gap_pp,
+  COUNT(*) AS institutions
+FROM base
+GROUP BY 1
+ORDER BY overall_completion_pct DESC;
+2) Pell vs non-Pell completion (with/without loans) by control
+WITH base AS (
+  SELECT
+    CASE CAST("CONTROL" AS text)
+      WHEN '1' THEN 'Public'
+      WHEN '2' THEN 'Private nonprofit'
+      WHEN '3' THEN 'Private for-profit'
+      ELSE CAST("CONTROL" AS text)
+    END AS control_type,
+    CASE WHEN "C150_4_PELL"::text ~ '^[0-9.]+$' THEN "C150_4_PELL"::numeric END AS pell_completion,
+    CASE WHEN "C150_4_LOANNOPELL"::text ~ '^[0-9.]+$' THEN "C150_4_LOANNOPELL"::numeric END AS nonpell_loan_completion,
+    CASE WHEN "C150_4_NOLOANNOPELL"::text ~ '^[0-9.]+$' THEN "C150_4_NOLOANNOPELL"::numeric END AS nonpell_no_loan_completion
+  FROM scorecard_2023_24_clean
+)
+SELECT
+  control_type,
+  ROUND(AVG(pell_completion) * 100, 1) AS pell_completion_pct,
+  ROUND(AVG(nonpell_loan_completion) * 100, 1) AS nonpell_with_loans_completion_pct,
+  ROUND(AVG(nonpell_no_loan_completion) * 100, 1) AS nonpell_without_loans_completion_pct,
+  ROUND((AVG(nonpell_no_loan_completion) - AVG(pell_completion)) * 100, 1) AS nonpell_no_loan_minus_pell_pp
+FROM base
+GROUP BY 1
+ORDER BY nonpell_no_loan_minus_pell_pp DESC;
+3) Pell-share quintiles vs completion (institution-level gradient)
+WITH base AS (
+  SELECT
+    CASE WHEN "PCTPELL"::text ~ '^[0-9.]+$' THEN "PCTPELL"::numeric END AS pell_share,
+    CASE WHEN "C150_4"::text ~ '^[0-9.]+$' THEN "C150_4"::numeric END AS completion
+  FROM scorecard_2023_24_clean
+),
+q AS (
+  SELECT
+    *,
+    NTILE(5) OVER (ORDER BY pell_share) AS pell_quintile
+  FROM base
+  WHERE pell_share IS NOT NULL
+    AND completion IS NOT NULL
+)
+SELECT
+  pell_quintile,
+  ROUND(MIN(pell_share) * 100, 1) AS min_pell_pct,
+  ROUND(MAX(pell_share) * 100, 1) AS max_pell_pct,
+  ROUND(AVG(completion) * 100, 1) AS avg_completion_pct,
+  COUNT(*) AS institutions
+FROM q
+GROUP BY 1
+ORDER BY 1;
+4) In-state tuition quintiles vs completion
+WITH base AS (
+  SELECT
+    CASE WHEN "TUITIONFEE_IN"::text ~ '^[0-9.]+$' THEN "TUITIONFEE_IN"::numeric END AS in_state_tuition,
+    CASE WHEN "C150_4"::text ~ '^[0-9.]+$' THEN "C150_4"::numeric END AS completion
+  FROM scorecard_2023_24_clean
+),
+q AS (
+  SELECT
+    *,
+    NTILE(5) OVER (ORDER BY in_state_tuition) AS tuition_quintile
+  FROM base
+  WHERE in_state_tuition IS NOT NULL
+    AND completion IS NOT NULL
+)
+SELECT
+  tuition_quintile,
+  ROUND(MIN(in_state_tuition), 0) AS min_tuition,
+  ROUND(MAX(in_state_tuition), 0) AS max_tuition,
+  ROUND(AVG(completion) * 100, 1) AS avg_completion_pct,
+  COUNT(*) AS institutions
+FROM q
+GROUP BY 1
+ORDER BY 1;
+5) State-level White-Black completion gap (min sample threshold)
+WITH base AS (
+  SELECT
+    "STABBR" AS state,
+    CASE WHEN "C150_4_WHITE"::text ~ '^[0-9.]+$' THEN "C150_4_WHITE"::numeric END AS white_completion,
+    CASE WHEN "C150_4_BLACK"::text ~ '^[0-9.]+$' THEN "C150_4_BLACK"::numeric END AS black_completion
+  FROM scorecard_2023_24_clean
+)
+SELECT
+  state,
+  ROUND(AVG(white_completion) * 100, 1) AS white_completion_pct,
+  ROUND(AVG(black_completion) * 100, 1) AS black_completion_pct,
+  ROUND((AVG(white_completion) - AVG(black_completion)) * 100, 1) AS white_black_gap_pp,
+  COUNT(*) AS institutions
+FROM base
+WHERE white_completion IS NOT NULL
+  AND black_completion IS NOT NULL
+GROUP BY 1
+HAVING COUNT(*) >= 15
+ORDER BY white_black_gap_pp DESC;
+6) Age vs bachelor-or-higher attainment (Census, with gender gap)
+WITH bachelors AS (
+  SELECT
+    row_order,
+    total_percent_estimate AS total_bachelors_or_higher_pct,
+    male_percent_estimate AS male_bachelors_or_higher_pct,
+    female_percent_estimate AS female_bachelors_or_higher_pct
+  FROM census_education_attainment_2024
+  WHERE section = 'AGE BY EDUCATIONAL ATTAINMENT'
+    AND label_level = 2
+    AND label = 'Bachelor''s degree or higher'
+)
+SELECT
+  (
+    SELECT h.label
+    FROM census_education_attainment_2024 h
+    WHERE h.section = 'AGE BY EDUCATIONAL ATTAINMENT'
+      AND h.label_level = 1
+      AND h.row_order < b.row_order
+    ORDER BY h.row_order DESC
+    LIMIT 1
+  ) AS age_group,
+  total_bachelors_or_higher_pct,
+  male_bachelors_or_higher_pct,
+  female_bachelors_or_higher_pct,
+  ROUND(female_bachelors_or_higher_pct - male_bachelors_or_higher_pct, 1) AS female_minus_male_pp
+FROM bachelors b
+ORDER BY row_order;
+7) Race/ethnicity vs bachelor-or-higher attainment (Census)
+WITH bachelors AS (
+  SELECT
+    row_order,
+    total_percent_estimate AS bachelors_or_higher_pct,
+    male_percent_estimate AS male_bachelors_pct,
+    female_percent_estimate AS female_bachelors_pct
+  FROM census_education_attainment_2024
+  WHERE section = 'RACE AND HISPANIC OR LATINO ORIGIN BY EDUCATIONAL ATTAINMENT'
+    AND label_level = 2
+    AND label = 'Bachelor''s degree or higher'
+)
+SELECT
+  (
+    SELECT h.label
+    FROM census_education_attainment_2024 h
+    WHERE h.section = 'RACE AND HISPANIC OR LATINO ORIGIN BY EDUCATIONAL ATTAINMENT'
+      AND h.label_level = 1
+      AND h.row_order < b.row_order
+    ORDER BY h.row_order DESC
+    LIMIT 1
+  ) AS race_group,
+  bachelors_or_higher_pct,
+  male_bachelors_pct,
+  female_bachelors_pct,
+  ROUND(female_bachelors_pct - male_bachelors_pct, 1) AS female_minus_male_pp
+FROM bachelors b
+ORDER BY bachelors_or_higher_pct DESC;
+8) Poverty rate by education attainment (Census)
+SELECT
+  label AS education_level,
+  total_percent_estimate AS poverty_pct,
+  male_percent_estimate AS male_poverty_pct,
+  female_percent_estimate AS female_poverty_pct
+FROM census_education_attainment_2024
+WHERE section LIKE 'POVERTY RATE%'
+ORDER BY row_order;
+9) Race attainment from Fed SHED (external validation)
+SELECT
+  category AS race_ethnicity,
+  MAX(CASE WHEN metric = 'Ever enrolled in an educational program after high school' THEN value_pct END) AS ever_enrolled_pct,
+  MAX(CASE WHEN metric = 'Received bachelor''s degree or more' THEN value_pct END) AS bachelors_or_more_pct
+FROM fed_higher_ed_shed_2024
+WHERE source_table_title = 'Table 43. Educational attainment'
+  AND section_group = 'Race/ethnicity'
+GROUP BY 1
+ORDER BY bachelors_or_more_pct DESC;
+10) Student loan burden ($25k+) by group (Fed SHED)
+SELECT
+  category,
+  MAX(CASE WHEN metric = '$25,000 or more' THEN value_pct END) AS debt_25k_or_more_pct,
+  MAX(CASE WHEN metric = 'Less than $25,000' THEN value_pct END) AS debt_under_25k_pct
+FROM fed_higher_ed_shed_2024
+WHERE source_table_title = 'Figure 35. Share with at least $25,000 student loan debt'
+GROUP BY 1
+ORDER BY debt_25k_or_more_pct DESC;
