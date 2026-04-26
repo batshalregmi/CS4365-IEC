@@ -61,16 +61,14 @@ docker exec timescale psql -U postgres -c "CREATE DATABASE metabase;"
 Run:
 
 ```bash
-python college_scorecard_parser.py
+python education_pipeline.py
 ```
 
 What this does:
 
-1. Loads the `MERGED2023_24_PP.csv` College Scorecard file into DuckDB as `scorecard_2023_24`
-2. Loads the Census CSV into DuckDB as `census_education_attainment_2024`
-3. Creates a filtered table `scorecard_2023_24_clean`
-4. Force-keeps analysis columns such as race, Pell, and selected gender-related fields
-5. Exports `scorecard_2023_24_clean` and `census_education_attainment_2024` to PostgreSQL
+1. Ingests all of the data sources into DuckDB, if you want it in a csv format then use `education_to_csv.py` instead
+2. Inserts it into PostgreSQL tables
+3. Will be visible in Metabase for querying and dashboarding
 
 ## Verify the Export
 
