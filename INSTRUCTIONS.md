@@ -70,19 +70,6 @@ What this does:
 2. Inserts it into PostgreSQL tables
 3. Will be visible in Metabase for querying and dashboarding
 
-## Verify the Export
-
-Check available PostgreSQL tables:
-
-```bash
-docker exec timescale psql -U postgres -d postgres -c "\dt"
-```
-
-Expected tables:
-
-- `scorecard_2023_24_clean`
-- `census_education_attainment_2024`
-
 ## Connect Metabase
 
 Open `http://localhost:3001` and add a PostgreSQL connection with:
